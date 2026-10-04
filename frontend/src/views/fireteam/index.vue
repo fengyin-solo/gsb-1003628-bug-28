@@ -24,6 +24,32 @@
       </span>
     </p>
 
+    <section class="alert-panel">
+      <header class="alert-head">
+        <h3>队伍出动提醒</h3>
+        <button class="btn ghost" type="button" @click="reload">刷新提醒</button>
+      </header>
+      <p v-if="!alerts.length" class="muted-line">暂无出动提醒；火情报告「出动扑救」提交后会与报告同次落库到这里。</p>
+      <table v-else class="data-table alert-table">
+        <thead>
+          <tr><th>提醒时间</th><th>报告编号</th><th>起火地点</th><th>火势等级</th><th>调派队伍</th><th>状态</th></tr>
+        </thead>
+        <tbody>
+          <tr v-for="alert in alerts" :key="alert.id" :class="{ revoked: alert.状态 === '已撤销' }">
+            <td>{{ alert.提醒时间 }}</td>
+            <td>{{ alert.报告编号 }}</td>
+            <td>{{ alert.起火地点 }}</td>
+            <td>{{ alert.火势等级 }}</td>
+            <td>{{ alert.队伍 }}</td>
+            <td>
+              <span :class="['alert-state', alert.状态 === '待处理' ? 'state-wait' : 'state-revoked']">{{ alert.状态 }}</span>
+              <span v-if="alert.状态 === '已撤销'" class="revoke-note">报告判为误报，同次撤销</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
     <form class="filter-bar" @submit.prevent="reload">
       <label v-for="field in filterFields" :key="field" class="filter-item">
         <span>{{ field }}</span>
@@ -75,11 +101,12 @@ import { computed, onMounted, ref } from 'vue'
 
 import {
   downloadEntries,
+  listAlerts,
   listEntries,
   moduleMeta,
   runAction as applyAction,
 } from '@/api/local-service'
-import type { EntryRow } from '@/data/types'
+import type { EntryRow, TeamAlert } from '@/data/types'
 
 const meta = moduleMeta('fireteam')
 const columns = ["队伍编号", "队伍名称", "所属林场", "队长姓名", "队员人数", "集结半径", "值班状态", "出动状态"]
@@ -90,6 +117,7 @@ const stats = [{"label": "队伍总数", "value": 0}, {"label": "待命队伍", 
 const rows = ref<EntryRow[]>([])
 const total = ref(0)
 const errorMessage = ref('')
+const alerts = ref<TeamAlert[]>([])
 const filters = ref<Record<string, string>>({})
 const filterFields = columns.slice(0, 3)
 const statusSummary = computed(() =>
@@ -128,6 +156,8 @@ function reload() {
     const payload = listEntries(meta.key, filters.value)
     rows.value = payload.items
     total.value = payload.total
+    // 最新提醒在前；撤销的保留留痕，便于核对「同次落库、误报同次撤销」。
+    alerts.value = [...listAlerts()].sort((a, b) => b.id - a.id)
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '扑火队伍列表读取失败'
   }
@@ -135,3 +165,16 @@ function reload() {
 
 onMounted(reload)
 </script>
+
+<style scoped>
+.alert-panel { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px 14px; margin-bottom: 12px; }
+.alert-head { display: flex; justify-content: space-between; align-items: center; }
+.alert-head h3 { margin: 0; font-size: 14px; }
+.muted-line { color: var(--muted); font-size: 13px; margin: 8px 0 0; }
+.alert-table { margin-top: 8px; }
+.alert-table tr.revoked { background: #f8fafc; color: var(--muted); }
+.alert-state { border-radius: 999px; padding: 2px 10px; font-size: 12px; }
+.state-wait { background: #fef3c7; color: #92400e; }
+.state-revoked { background: #e2e8f0; color: #64748b; }
+.revoke-note { font-size: 11px; color: var(--muted); margin-left: 6px; }
+</style>
