@@ -43,6 +43,14 @@ export function runAction(key: string, id: number, action: string): ActionResult
   if (current === target) {
     return { ok: false, message: `${meta.entity}已经是「${target}」，不用重复操作` }
   }
+  // 顺序推进守卫：登记了前置状态的动作只能从指定状态发起，杜绝旧进度被重复推进。
+  const sources = meta.actionSources?.[action]
+  if (sources && !sources.includes(current)) {
+    return {
+      ok: false,
+      message: `${meta.entity}当前为「${current}」，不能执行「${action}」（需先处于「${sources.join('、')}」）`,
+    }
+  }
   const lastStatus = meta.statuses[meta.statuses.length - 1]
   const updated: EntryRow = {
     ...rows[index],
